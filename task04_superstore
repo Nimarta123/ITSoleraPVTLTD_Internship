@@ -1,0 +1,94 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# Set Page Configuration
+st.set_page_config(page_title="Global Superstore Analytics", layout="wide")
+
+# 1. Load and Prepare Dataset
+@st.cache_data
+def load_data():
+    # Load the dataset
+    df = pd.read_csv('superstore.csv')
+    
+    # Basic Cleaning: Ensure column names with dots are handled correctly
+    # The dataset uses dots (e.g., 'Sub.Category') instead of spaces or underscores
+    return df
+
+df = load_data()
+
+# --- Sidebar Filters ---
+st.sidebar.header("Dashboard Filters")
+
+# Region Filter
+region_list = df["Region"].unique().tolist()
+selected_regions = st.sidebar.multiselect("Select Region", options=region_list, default=region_list)
+
+# Category Filter
+category_list = df["Category"].unique().tolist()
+selected_categories = st.sidebar.multiselect("Select Category", options=category_list, default=category_list)
+
+# Sub-Category Filter (Filtered based on Category if needed, but here a simple multiselect)
+sub_cat_list = df["Sub.Category"].unique().tolist()
+selected_sub_cats = st.sidebar.multiselect("Select Sub-Category", options=sub_cat_list, default=sub_cat_list)
+
+# Applying Filters to DataFrame
+filtered_df = df[
+    (df["Region"].isin(selected_regions)) & 
+    (df["Category"].isin(selected_categories)) & 
+    (df["Sub.Category"].isin(selected_sub_cats))
+]
+
+# --- Main Dashboard Area ---
+st.title("📊 Global Superstore Business Dashboard")
+st.markdown("An interactive analysis of Sales, Profit, and Customer Performance.")
+
+# 2. Key Performance Indicators (KPIs)
+total_sales = filtered_df["Sales"].sum()
+total_profit = filtered_df["Profit"].sum()
+total_orders = filtered_df.shape[0]
+
+# Display KPI Metrics
+kpi1, kpi2, kpi3 = st.columns(3)
+kpi1.metric("Total Sales", f"${total_sales:,.2f}")
+kpi2.metric("Total Profit", f"${total_profit:,.2f}")
+kpi3.metric("Total Orders", f"{total_orders:,}")
+
+st.divider()
+
+# 3. Visualizations
+row1_col1, row1_col2 = st.columns(2)
+
+with row1_col1:
+    # Sales and Profit by Category (Comparison Chart)
+    st.subheader("Sales & Profit by Category")
+    cat_performance = filtered_df.groupby("Category")[["Sales", "Profit"]].sum().reset_index()
+    fig_performance = px.bar(
+        cat_performance, 
+        x="Category", 
+        y=["Sales", "Profit"], 
+        barmode="group",
+        color_discrete_sequence=["#1f77b4", "#2ca02c"]
+    )
+    st.plotly_chart(fig_performance, use_container_width=True)
+
+with row1_col2:
+    # Top 5 Customers by Sales
+    st.subheader("Top 5 Customers by Sales")
+    top_customers = filtered_df.groupby("Customer.Name")["Sales"].sum().sort_values(ascending=False).head(5).reset_index()
+    fig_customers = px.bar(
+        top_customers, 
+        x="Sales", 
+        y="Customer.Name", 
+        orientation='h',
+        color="Sales",
+        color_continuous_scale="Viridis",
+        labels={"Customer.Name": "Customer Name", "Sales": "Total Sales ($)"}
+    )
+    # Invert y-axis to show highest on top
+    fig_customers.update_layout(yaxis={'categoryorder':'total ascending'})
+    st.plotly_chart(fig_customers, use_container_width=True)
+
+# 4. Detailed Data View (Optional but helpful for BI)
+if st.checkbox("Show Raw Filtered Data"):
+    st.dataframe(filtered_df.head(100))
